@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Query Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+
+    <div class="main-container">
+        <header class="app-header">
+            <h1>🤖 AI Query Assistant</h1>
+            <p class="subtitle">Ask me anything and get instant AI-powered answers</p>
+            <p class="subtitle">Instant streaming • Perfect formatting • Smooth loading</p>
+
+        </header>
+
+        <div class="query-section">
+            <div class="input-wrapper">
+                <textarea id="userQuestionInput" placeholder="Type your question here..." rows="4"></textarea>
+            </div>
+            <button id="submitQueryButton" class="submit-btn">
+                <span class="btn-text">Get Answer</span>
+                <span class="btn-loader">Loading...</span>
+            </button>
+        </div>
+
+        <!-- This will hold the current conversation (cleared on new question) -->
+        <div id="chatContainer" class="chat-container"></div>
+
+        <div id="errorContainer" class="error-container">
+            <span class="error-icon">⚠️</span>
+            <span id="errorMessageText"></span>
+        </div>
+
+        <footer class="app-footer">
+            <p>Powered by Google Gemini AI | CSC331 Project</p>
+        </footer>
+    </div>
+
+    <script>
+        const input = document.getElementById('userQuestionInput');
+        const btn = document.getElementById('submitQueryButton');
+        const btnText = btn.querySelector('.btn-text');
+        const btnLoader = btn.querySelector('.btn-loader');
+        const chatContainer = document.getElementById('chatContainer');
+        const errorContainer = document.getElementById('errorContainer');
+
+        btn.addEventListener('click', ask);
+        input.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                ask();
+            }
+        });
+
+        async function ask() {
+            const question = input.value.trim();
+            if (!question) return;
+
+            // === CLEAR PREVIOUS CONVERSATION ===
+            chatContainer.innerHTML = '';
+
+            // === SHOW USER QUESTION ===
+            const userBubble = document.createElement('div');
+            userBubble.className = 'message user-message';
+            userBubble.innerHTML = `<div class="message-content">${question.replace(/\n/g, '<br>')}</div>`;
+            chatContainer.appendChild(userBubble);
+
+            // === SHOW THINKING... ===
+            const thinking = document.createElement('div');
+            thinking.className = 'message ai-message';
+            thinking.innerHTML = `<div class="loading-message">Thinking<span class="dots">...</span></div>`;
+            chatContainer.appendChild(thinking);
+
+            // UI: Show loading in button
+            btnText.style.display = 'none';
+            btnLoader.style.display = 'inline';
+            btn.disabled = true;
+            input.disabled = true;
+            errorContainer.style.display = 'none';
+
+            try {
+                const res = await fetch('/api/query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question, stream: true })
+                });
+
+                const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+                let full = '';
+
+                // Replace "Thinking..." with streaming answer
+                const answerBubble = document.createElement('div');
+                answerBubble.className = 'message ai-message';
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'response-content';
+                answerBubble.appendChild(contentDiv);
+                answerBubble.appendChild(document.createElement('div')).className = 'typing-cursor';
+                chatContainer.replaceChild(answerBubble, thinking);
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    full += value;
+                    contentDiv.innerHTML = marked.parse(full);
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+
+                contentDiv.innerHTML = marked.parse(full);
+                answerBubble.querySelector('.typing-cursor').style.display = 'none';
+
+            } catch (err) {
+                chatContainer.lastChild.innerHTML = '<div class="error-message">Failed to get answer. Try again.</div>';
+            } finally {
+                btnText.style.display = 'inline';
+                btnLoader.style.display = 'none';
+                btn.disabled = false;
+                input.disabled = false;
+                input.value = '';
+                input.focus();
+            }
+        }
+    </script>
+</body>
+</html>
