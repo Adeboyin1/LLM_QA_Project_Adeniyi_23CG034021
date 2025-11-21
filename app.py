@@ -13,7 +13,7 @@ app = Flask(__name__)
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
 
 model = genai.GenerativeModel(
-    'gemini-pro-latest',   # Fast, cheap, almost never blocks — perfect for projects
+    'gemini-pro-latest',  
     generation_config={
         "temperature": 0.7,
         "top_p": 0.8,
